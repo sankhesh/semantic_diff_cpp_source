@@ -2,6 +2,7 @@
 
 import logging
 import os
+import subprocess
 import sys
 
 try:
@@ -20,9 +21,9 @@ if sys.platform == "win32":
     home = os.getenv('USERPROFILE')
 else:
     home = os.getenv('HOME')
-#-----------------------------------------------------------------------------
-# validate input versions
-#-----------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# validate input
+#------------------------------------------------------------------------------
 def validate_input(options):
     global home
     # Start logging
@@ -34,29 +35,32 @@ def validate_input(options):
         formatter = logging.Formatter(formatting)
         file_handler.setFormatter(formatter)
         logging.getLogger('').addHandler(file_handler)
+    # Check if the versions provided are the same
+    if options.versions[0] == options.versions[1]:
+        logging.error("The versions provided to diff are the same")
+        sys.exit(1)
+    # Create temp directory if it does not exist
+#    if not options.tmp:
+#        logging.info("Creating temporary directory (~/tmp)")
+#        tmp_dir = home + os.sep + "tmp"
+#        options.tmp = tmp_dir
+#    if not os.path.exists(options.tmp):
+#        os.mkdir(tmp_dir)
 
-    if not options.tmp:
-        logging.info("Creating temporary directory (~/tmp)")
-        tmp_dir = home + os.sep + "tmp"
-        if os.path.exists(tmp_dir):
-
-#
-#    if options.old == options.new:
-
-#-----------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 # Arguments parser
 # -v, --versions    Two different versions to compare
 # -t, --tmp         Temporary directory
 # -l, --log         Log file
-#-----------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def add_arguments(parser):
     parser.add_argument("-v", "--versions", type=str, nargs=2, required=True,
         metavar=('old', 'new'), help="Versions to compare")
-    parser.add_argument("-t", "--tmp", type=str, default="",
-        help="Path for directory where temporary git checkouts will be made. "\
-             "The user should have write access to this directory. "\
-             "(default=~/tmp)")
+#    parser.add_argument("-t", "--tmp", type=str, default="",
+#        help="Path for directory where temporary git checkouts will be made. "\
+#             "The user should have write access to this directory. "\
+#             "(default=~/tmp)")
     parser.add_argument("-l", "--log", type=str, default="",
         help="Log output to this file (default=None)")
     return parser
