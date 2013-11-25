@@ -6,13 +6,6 @@ import subprocess
 import sys
 
 try:
-    import pyctags
-except ImportError:
-    message = "This script requires that pyctags be installed on the "\
-              "system. (\'pip install pyctags\')"
-    raise ImportError(message)
-
-try:
     import argparse
 except ImportError:
     import _argparse as argparse
@@ -21,6 +14,15 @@ if sys.platform == "win32":
     home = os.getenv('USERPROFILE')
 else:
     home = os.getenv('HOME')
+
+#------------------------------------------------------------------------------
+# validate input
+#------------------------------------------------------------------------------
+def parse_tags(tag_file):
+    with open(tag_file) as f:
+        for line in f:
+            if line
+
 #------------------------------------------------------------------------------
 # validate input
 #------------------------------------------------------------------------------
@@ -53,8 +55,8 @@ def validate_input(options):
 # -t, --tmp         Temporary directory
 # -l, --log         Log file
 #------------------------------------------------------------------------------
-
 def add_arguments(parser):
+    parser.add_argument('-s', '--source', type=str)
     parser.add_argument("-v", "--versions", type=str, nargs=2, required=True,
         metavar=('old', 'new'), help="Versions to compare")
 #    parser.add_argument("-t", "--tmp", type=str, default="",
@@ -72,6 +74,7 @@ def start(argv=None,
     add_arguments(parser)
     args = parser.parse_args(argv)
     validate_input(args)
+    parse_tags(str(args.source))
 
 if __name__ == "__main__":
     start()
