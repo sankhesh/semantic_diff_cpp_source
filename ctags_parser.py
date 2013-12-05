@@ -89,8 +89,29 @@ class CTags():
                 met = t._class + ":" + t._name
                 self._pub_methods.append(met)
 
+class CompareVersions():
+    def __init__(self):
+        self._classes_removed = []
+        self._classes_added = []
+        self._pub_methods_removed = []
+        self._pub_methods_added = []
+    
+    def add_tag_files(self, tagFileOld, tagFileNew):
+        self.get_diff(tagFileOld, tagFileNew)
+
+    def get_diff(self, tagF1, tagF2):
+        T1 = CTags()
+        T1.set_tag_file(tagF1)
+        T2 = CTags()
+        T2.set_tag_file(tagF2)
+        self._classes_added = list(set(T2._classes) - set(T1._classes))
+        self._classes_removed = list(set(T1._classes) - set(T2._classes))
+        self._pub_methods_added = list(set(T2._pub_methods) - set(T1._pub_methods))
+        self._pub_methods_removed = list(set(T1._pub_methods) - set(T2._pub_methods))
+
 if __name__ == '__main__':
-    T = CTags()
-    T.set_tag_file(sys.argv[1])
-    print set(T._pub_methods[1:10])
+    C = CompareVersions()
+    C.add_tag_files(sys.argv[1], sys.argv[1])
+    print C._classes_added, C._classes_removed, C._pub_methods_added, C._pub_methods_removed
+
 
