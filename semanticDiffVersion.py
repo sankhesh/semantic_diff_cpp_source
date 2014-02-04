@@ -95,7 +95,7 @@ class CompareVersions():
         self._classes_added = []
         self._pub_methods_removed = []
         self._pub_methods_added = []
-    
+
     def add_tag_files(self, tagFileOld, tagFileNew):
         self.get_diff(tagFileOld, tagFileNew)
 
