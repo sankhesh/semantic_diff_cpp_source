@@ -2,8 +2,17 @@
 # ctags -R --sort=yes --c++-kinds=cf --fields=aiksz --language-force=C++
 # --exclude=*.in --exclude=*.java --exclude=*.py --exclude=*.js -f vtk ~/Projects/vtk/src
 
-import sys
+import distutils.spawn
+import os.path
 import re
+import subprocess
+import sys
+import tempfile
+
+try:
+    import argparse
+except ImportError:
+    import _argparse as argparse
 
 tagMatcherType = re.compile('^(.+)\t(\S+)\t/\^(.*)\$/;"\t(.*)\n')
 
@@ -90,11 +99,17 @@ class CTags():
                 self._pub_methods.append(met)
 
 class CompareVersions():
-    def __init__(self):
+    def __init__(self, src_dir, version1, version2):
+        self.src_dir = os.path.abspath(src_dir)
+        self.version1 = version1
+        self.version2 = version2
         self._classes_removed = []
         self._classes_added = []
         self._pub_methods_removed = []
         self._pub_methods_added = []
+        self._git_HEAD = None
+        self.tag_f1 = None
+        self.tag_f2 = None
 
     def add_tag_files(self, tagFileOld, tagFileNew):
         self.get_diff(tagFileOld, tagFileNew)
@@ -109,9 +124,136 @@ class CompareVersions():
         self._pub_methods_added = list(set(T2._pub_methods) - set(T1._pub_methods))
         self._pub_methods_removed = list(set(T1._pub_methods) - set(T2._pub_methods))
 
+    def git_checkout_version(self, ver):
+        git_exe = distutils.spawn.find_executable("git")
+        git_cmd = git_exe + ' --git-dir=' + self.src_dir + os.sep + '.git --work-tree=' +\
+            self.src_dir
+        # Make sure working tree does not have any local modifications
+        git_modified = git_cmd + ' ls-files -m'
+        git_m_proc = subprocess.Popen(git_cmd.split(), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        git_m_proc.wait()
+        git_m_proc_stdout = git_m_proc.stdout.read()
+        if git_m_proc_stdout:
+            print "Working tree has local modifications."
+            print "Please commit or reset the following files:"
+            print git_m_proc_stdout
+            sys.exit(1)
+
+        # Reset the working tree to version specified
+        git_reset_cmd = git_cmd + ' reset --hard ' + ver
+        git_proc = subprocess.Popen(git_reset_cmd.split(), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        git_proc.wait()
+        git_proc_stderr = git_proc.stderr.read()
+        if git_proc_stderr:
+            print "Error while git reset to version:", ver
+            print git_proc_stderr
+            sys.exit(1)
+
+    def create_tagfile(self, src_dir, fname):
+        ctags_exe = distutils.spawn.find_executable("ctags")
+        ctags_proc = subprocess.Popen([ctags_exe, '-R', '--sort=yes',
+            '--c++-kinds=cf', '--fields=aiksz', '--language-force=C++',
+            '--exclude=*.in', '--exclude=*.java', '--exclude=*.py',
+            '--exclude=*.js', '-f', fname, src_dir], stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        ctags_proc.wait()
+        ctags_proc_stderr = ctags_proc.stderr.read()
+        if ctags_proc_stderr:
+            print "Error while creating tagfile with ctags:", fname
+            print ctags_proc_stderr
+            sys.exit(1)
+
+    def generate_ctags(self):
+        # Store the current HEAD SHA-1 sum
+        self._git_HEAD = self.git_current_version(self.src_dir)
+        # Reset working tree to version1
+        self.git_checkout_version(self.version1)
+        # Create tag file for version1
+        self.tag_f1 = self.gen_tagfile_name(self.src_dir, self.version1)
+        self.create_tagfile(self.src_dir, self.tag_f1)
+        # Reset working tree to version2
+        self.git_checkout_version(self.version2)
+        # Create tag file for version2
+        self.tag_f2 = self.gen_tagfile_name(self.src_dir, self.version2)
+        self.create_tagfile(self.src_dir, self.tag_f2)
+
+    def gen_tagfile_name(self, src_dir, ver):
+        src = os.path.basename(src_dir)
+        tag_f_name = src + "_" + ver + '.ctags'
+        return tag_f_name
+
+    def git_current_version(self, src_dir):
+        git_exe = distutils.spawn.find_executable("git")
+        git_cmd = git_exe + ' --git-dir=' + src_dir + os.sep +\
+                '.git --work-tree=' + src_dir + ' rev-parse HEAD'
+        git_proc = subprocess.Popen(git_cmd.split(), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        git_proc.wait()
+        git_proc_stderr = git_proc.stderr.read()
+        if git_proc_stderr:
+            print "Error while getting current HEAD SHA-1 sum:"
+            print git_proc_stderr
+            sys.exit(1)
+        return git_proc_stdout.read()
+
+    def cleanup(self):
+        if os.path.exists(self.tag_f1):
+            os.remove(self.tag_f1)
+        if os.path.exists(self.tag_f2):
+            os.remove(self.tag_f2)
+        # Restore the working directory to its original state
+        self.git_checkout_version(self._git_HEAD)
+
+class SystemVar():
+    def __init__(self):
+        self.git_exe = None
+        self.ctags_exe = None
+        self.get_exes()
+
+    def get_exes(self):
+        self.git_exe = self.get_exe("git")
+        self.ctags_exe = self.get_exe("ctags")
+
+    def get_exe(self, exe):
+        exe_file = distutils.spawn.find_executable(exe)
+        if not exe_file:
+            print "Git not found in PATH"
+            for trial in range(3):
+                exe_file = raw_input("Enter full path to GIT executable:\n")
+                if os.path.isfile(exe_file) and os.access(exe_file, os.X_OK):
+                    break
+                else
+                    print "The provided path is not an executable"
+                    exe_file = None
+            if not exe_file:
+                print "Could not locate GIT executable in 3 tries. Exiting..."
+                sys.exit(1)
+        return exe_file
+
+def start(args):
+    # Create a clone of the current working tree in temp dir
+    git
+    C = CompareVersions(args.src[0], args.versions[0], args.versions[1])
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Compare two different'\
+        ' revisions of a C++ source tree under GIT revision control')
+    parser.add_argument("src", type=str, nargs=1,
+        help="Path to the working directory")
+    parser.add_argument("versions", type=str, nargs=2,
+        help="Two versions to compare. (SHA/branch/tag)")
+    parser.add_argument("-t", "--tmp", type=str,
+        default=tempfile.gettempdir(),
+        help="Path to a temporary directory where the current working tree"\
+             " can be cloned.(default: System Temp Directory")
+    parser.add_argument("-c", "--cleanup", type=bool, default=True,
+            help="Cleanup tag files.(default:True)")
+
+    args = parser.parse_args()
+    start(args)
     C = CompareVersions()
     C.add_tag_files(sys.argv[1], sys.argv[1])
     print C._classes_added, C._classes_removed, C._pub_methods_added, C._pub_methods_removed
-
-
