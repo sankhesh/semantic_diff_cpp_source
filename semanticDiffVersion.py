@@ -107,10 +107,10 @@ class CompareVersions():
         self.src_work_dir = os.path.abspath(src_dir)
         self.version1 = version1
         self.version2 = version2
-        self._classes_removed = []
-        self._classes_added = []
-        self._pub_methods_removed = []
-        self._pub_methods_added = []
+        self.classes_removed = []
+        self.classes_added = []
+        self.pub_methods_removed = []
+        self.pub_methods_added = []
         self.tag_f1 = None
         self.tag_f2 = None
         self._git_HEAD = None
@@ -131,10 +131,10 @@ class CompareVersions():
         T2 = CTags()
         T2.set_tag_file(self.tag_f2)
         print "Parsing tag file %s...Done" % self.tag_f2
-        self._classes_added = list(set(T2._classes) - set(T1._classes))
-        self._classes_removed = list(set(T1._classes) - set(T2._classes))
-        self._pub_methods_added = list(set(T2._pub_methods) - set(T1._pub_methods))
-        self._pub_methods_removed = list(set(T1._pub_methods) - set(T2._pub_methods))
+        self.classes_added = list(set(T2._classes) - set(T1._classes))
+        self.classes_removed = list(set(T1._classes) - set(T2._classes))
+        self.pub_methods_added = list(set(T2._pub_methods) - set(T1._pub_methods))
+        self.pub_methods_removed = list(set(T1._pub_methods) - set(T2._pub_methods))
 
     def git_checkout_version(self, ver):
         git_cmd = self.svar.git_exe + ' --git-dir=' + self.src_dir + os.sep + '.git --work-tree=' +\
@@ -152,7 +152,7 @@ class CompareVersions():
             sys.exit(1)
 
         # Reset the working tree to version specified
-        git_reset_cmd = git_cmd + ' reset --hard ' + ver
+        git_reset_cmd = git_cmd + ' reset -q --hard ' + ver
         git_proc = subprocess.Popen(git_reset_cmd.split(), stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
         git_proc.wait()
@@ -273,12 +273,62 @@ class SystemVar():
                 sys.exit(1)
         return exe_file
 
+def printReport(comp, args):
+    if args.wikiOutput:
+        print "==API differences when going from version %s to version %s=="\
+            %(args.versions[0], args.versions[1])
+        print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
+            'cellspacing="0"'
+        print r'!Classes Added'
+        for cls in comp.classes_added:
+            print r'|-'
+            print r'|%s' %cls
+        print r'|}'
+        print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
+            'cellspacing="0"'
+        print r'!Classes Removed'
+        for cls in comp.classes_removed:
+            print r'|-'
+            print r'|%s' %cls
+        print r'|}'
+        print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
+            'cellspacing="0"'
+        print r'!Public Methods Added'
+        for cls in comp.pub_methods_added:
+            print r'|-'
+            print r'|%s' %cls
+        print r'|}'
+        print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
+            'cellspacing="0"'
+        print r'!Public Methods Removed'
+        for cls in comp.pub_methods_removed:
+            print r'|-'
+            print r'|%s' %cls
+        print r'|}'
+    else:
+        print "-------------------- REPORT --------------------"
+        print "==API differences when going from version %s to version %s=="\
+            %(args.versions[0], args.versions[1])
+        print "~~~~~~~~~~~~~~~~Classes Added~~~~~~~~~~~~~~~~~~~"
+        for cls in comp.classes_added:
+            print cls
+        print "~~~~~~~~~~~~~~~Classes Removed~~~~~~~~~~~~~~~~~~"
+        for cls in comp.classes_removed:
+            print cls
+        print "~~~~~~~~~~~~~Public Methods Added~~~~~~~~~~~~~~~"
+        for cls in comp.pub_methods_added:
+            print cls
+        print "~~~~~~~~~~~~Public Methods Removed~~~~~~~~~~~~~~"
+        for cls in comp.pub_methods_removed:
+            print cls
+
+
 def start(args):
     # Create a clone of the current working tree in temp dir
     C = CompareVersions(args.src[0], args.versions[0], args.versions[1],
             args.tmp)
-    print C._classes_added, C._classes_removed, C._pub_methods_added, C._pub_methods_removed
-    if args.cleanup:
+    printReport(C, args)
+    if not args.dontClean:
         C.cleanup()
     else:
         # Restore the working directory to its original state
@@ -297,8 +347,10 @@ if __name__ == '__main__':
         default=tempfile.gettempdir(),
         help="Path to a temporary directory where the current working tree"\
              " can be cloned.(default: System Temp Directory")
-    parser.add_argument("-c", "--cleanup", type=bool, default=True,
-            help="Cleanup tag files.(default:True)")
+    parser.add_argument("-w", "--wikiOutput", action='store_true',
+        help="Print output with wiki markup.")
+    parser.add_argument("-d", "--dontClean", action='store_true',
+        help="Do not delete temporary files and directories.")
 
     args = parser.parse_args()
     start(args)
