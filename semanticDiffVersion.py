@@ -114,6 +114,7 @@ class CompareVersions():
         self.tag_f1 = None
         self.tag_f2 = None
         self._git_HEAD = None
+        self._git_diff = None
         # Get system executable paths for git and ctags
         self.svar = SystemVar()
         # Setup the temporary working tree
@@ -219,6 +220,25 @@ class CompareVersions():
             print git_proc_stderr
             sys.exit(1)
         return git_proc.stdout.read()
+
+    def git_diff_versions(self):
+        git_cmd = self.svar.git_exe + ' --git-dir=' + src_dir + os.sep +\
+                '.git --work-tree=' + src_dir + ' diff ' + self.version1 +\
+                '..' + self.version2
+        git_proc = subprocess.Popen(git_cmd.split(), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        git_proc.wait()
+        git_proc_stderr = git_proc.stderr.read()
+        if git_proc_stderr:
+            print "Error while getting git diff between versions %s and %s" %\
+                (self.version1, self.version2)
+            print git_proc_stderr
+            sys.exit(1)
+        return git_proc.stdout.read()
+
+    def get_deprecated_methods(self):
+        self._git_diff = self.git_diff_versions()
+        depMatcherType = re.compile('^\+\tVTK_LEGACY_BODY\((.*),"(.*)"')
 
     def setup_src_dir(self):
         print "Setting up a clone of working tree (%s) in %s..." %\
