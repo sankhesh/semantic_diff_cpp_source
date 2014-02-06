@@ -115,10 +115,15 @@ class CompareVersions():
         self.tag_f2 = None
         self._git_HEAD = None
         self._git_diff = None
+        self.dep_methods = {}
         # Get system executable paths for git and ctags
         self.svar = SystemVar()
         # Setup the temporary working tree
         self.setup_src_dir()
+
+        # Get newly deprecated methods list
+        self.get_deprecated_methods()
+
         # Compare the two versions provided
         self.generate_ctags()
         self.get_diff()
@@ -222,28 +227,36 @@ class CompareVersions():
         return git_proc.stdout.read()
 
     def git_diff_versions(self):
-        git_cmd = self.svar.git_exe + ' --git-dir=' + src_dir + os.sep +\
-                '.git --work-tree=' + src_dir + ' diff ' + self.version1 +\
+        git_cmd = self.svar.git_exe + ' --git-dir=' + self.src_dir + os.sep +\
+                '.git --work-tree=' + self.src_dir + ' diff ' + self.version1 +\
                 '..' + self.version2
-        git_proc = subprocess.Popen(git_cmd.split(), stdout=subprocess.PIPE,
+        self._git_diff = self.tmp_dir + os.sep + os.path.basename(self.src_dir)\
+                + "_" + self.version1 + "_" + self.version2 + ".diff"
+        with open(self._git_diff, "w") as diff_file:
+            git_proc = subprocess.Popen(git_cmd.split(), stdout=diff_file,
                 stderr=subprocess.PIPE)
-        git_proc.wait()
-        git_proc_stderr = git_proc.stderr.read()
-        if git_proc_stderr:
-            print "Error while getting git diff between versions %s and %s" %\
-                (self.version1, self.version2)
-            print git_proc_stderr
-            sys.exit(1)
-        return git_proc.stdout.read()
+            git_proc.wait()
+            git_proc_stderr = git_proc.stderr.read()
+            if git_proc_stderr:
+                print "Error while getting git diff between versions %s and %s" %\
+                    (self.version1, self.version2)
+                print git_proc_stderr
+                sys.exit(1)
 
     def get_deprecated_methods(self):
-        self._git_diff = self.git_diff_versions()
-        depMatcherType = re.compile('^\+\tVTK_LEGACY_BODY\((.*),"(.*)"')
+        depMatcherType = re.compile('^\+.*VTK_LEGACY_BODY\((.*),\s*"(.*)"\).*\n')
+        self.git_diff_versions()
+        with open(self._git_diff, "r+") as diff_file:
+            for line in diff_file:
+                dep_diff = depMatcherType.search(line)
+                if dep_diff:
+                    self.dep_methods[dep_diff.expand('\\1').strip()] =\
+                        dep_diff.expand('\\2').strip()
 
     def setup_src_dir(self):
         print "Setting up a clone of working tree (%s) in %s..." %\
             (self.src_work_dir, self.src_dir)
-        git_cmd = self.svar.git_exe + ' clone -l --no-hardlinks ' +\
+        git_cmd = self.svar.git_exe + ' clone -l --no-hardlinks -q ' +\
             self.src_work_dir + ' ' + self.src_dir
         git_proc = subprocess.Popen(git_cmd.split(), stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
@@ -262,6 +275,8 @@ class CompareVersions():
             os.remove(self.tag_f1)
         if os.path.exists(self.tag_f2):
             os.remove(self.tag_f2)
+        if os.path.exists(self._git_diff):
+            os.remove(self._git_diff)
         if os.path.exists(self.src_dir):
             shutil.rmtree(self.src_dir)
 
@@ -325,6 +340,16 @@ def printReport(comp, args):
             print r'|-'
             print r'|%s' %cls
         print r'|}'
+        print "==Deprecated Methods=="
+        print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
+            'cellspacing="0"'
+        print r'!Method'
+        print r'!Deprecated as of'
+        for cls in comp.dep_methods:
+            print r'|-'
+            print r'|%s' %cls
+            print r'|%s' %comp.dep_methods[cls]
+        print r'|}'
     else:
         print "-------------------- REPORT --------------------"
         print "==API differences when going from version %s to version %s=="\
@@ -341,6 +366,9 @@ def printReport(comp, args):
         print "~~~~~~~~~~~~Public Methods Removed~~~~~~~~~~~~~~"
         for cls in comp.pub_methods_removed:
             print cls
+        print "~~~~~~~~~~~~~~Deprecated Methods~~~~~~~~~~~~~~~~~"
+        for cls in comp.dep_methods:
+            print "%s\tdeprecated as of\t%s" %(cls, comp.dep_methods[cls])
 
 
 def start(args):
