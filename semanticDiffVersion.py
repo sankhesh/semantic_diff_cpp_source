@@ -54,13 +54,22 @@ class Tag:
         self._decl = tag.expand('\\3').strip()
         exts = tag.expand('\\4').strip().split('\t')
         for ext in exts:
-            pre = ext.strip().split(':')[0]
-            suf = ext.strip().split(':')[1]
+            ext_stripped = ext.strip()
+            pre = ext_stripped.split(':')[0]
+            suf = ext_stripped.split(':')[1]
             if pre == 'kind':
                 self._kind = suf
                 continue
             if pre == 'class' or pre == 'struct':
-                self._class = suf
+                first_colon = ext_stripped.find(':')
+                self._class = ext_stripped[(first_colon+1):]
+                if "anon" in self._class:
+                    first_anon = self._class.find('__anon')
+                    first_dcolon = self._class[first_anon:].find("::")
+                    if first_dcolon > -1:
+                        self._class = self._class[(first_anon+first_dcolon+2):]
+                    else:
+                        self._class = ""
                 continue
             if pre == 'access':
                 self._access = suf
@@ -75,6 +84,8 @@ class CTags():
         self._tagFile = "" # path to tag file
         self._classes = []
         self._pub_methods = []
+        self._class_file = {}
+        self._met_file = {}
 
     def set_tag_file(self, path):
         """
@@ -96,9 +107,11 @@ class CTags():
        # Now make append to list of classes and public methods
             if t._kind == 'c':
                 self._classes.append(t._name)
+                self._class_file[t._name] = t._fyle
             if t._kind == 'f' and t._access == 'public':
                 met = t._class + ":" + t._name
                 self._pub_methods.append(met)
+                self._met_file[met] = t._fyle
 
 class CompareVersions():
     def __init__(self, src_dir, version1, version2, tmp_dir):
@@ -108,9 +121,13 @@ class CompareVersions():
         self.version1 = version1
         self.version2 = version2
         self.classes_removed = []
+        self._classes_removed = {}
         self.classes_added = []
+        self._classes_added = {}
         self.pub_methods_removed = []
+        self._pub_methods_removed = {}
         self.pub_methods_added = []
+        self._pub_methods_added = {}
         self.tag_f1 = None
         self.tag_f2 = None
         self._git_HEAD = None
@@ -141,6 +158,15 @@ class CompareVersions():
         self.classes_removed = list(set(T1._classes) - set(T2._classes))
         self.pub_methods_added = list(set(T2._pub_methods) - set(T1._pub_methods))
         self.pub_methods_removed = list(set(T1._pub_methods) - set(T2._pub_methods))
+
+        for cls in self.classes_added:
+            self._classes_added[cls] = T2._class_file[cls]
+        for cls in self.classes_removed:
+            self._classes_removed[cls] = T1._class_file[cls]
+        for met in self.pub_methods_added:
+            self._pub_methods_added[met] = T2._met_file[met]
+        for met in self.pub_methods_removed:
+            self._pub_methods_removed[met] = T1._met_file[met]
 
     def git_checkout_version(self, ver):
         git_cmd = self.svar.git_exe + ' --git-dir=' + self.src_dir + os.sep + '.git --work-tree=' +\
@@ -309,36 +335,52 @@ class SystemVar():
         return exe_file
 
 def printReport(comp, args):
+    # Remove location of temp dir from printout
+    str_to_replace = os.path.abspath(args.tmp) + os.sep +\
+        os.path.basename(args.src[0]) + os.sep
+
     if args.wikiOutput:
         print "==API differences when going from version %s to version %s=="\
             %(args.versions[0], args.versions[1])
+        print "===Classes added in version %s===" %args.versions[1]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
-        print r'!Classes Added'
-        for cls in comp.classes_added:
+        print r'!Class Name'
+        print r'!File'
+        for cls in comp._classes_added:
             print r'|-'
             print r'|%s' %cls
+            print r'|%s' %comp._classes_added[cls].replace(str_to_replace, '')
         print r'|}'
+        print "===Classes removed from version %s===" %args.versions[0]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
-        print r'!Classes Removed'
-        for cls in comp.classes_removed:
+        print r'!Class Name'
+        print r'!File'
+        for cls in comp._classes_removed:
             print r'|-'
             print r'|%s' %cls
+            print r'|%s' %comp._classes_removed[cls].replace(str_to_replace, '')
         print r'|}'
+        print "===Public methods added in version %s===" %args.versions[1]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
-        print r'!Public Methods Added'
-        for cls in comp.pub_methods_added:
+        print r'!Method'
+        print r'!File'
+        for cls in comp._pub_methods_added:
             print r'|-'
             print r'|%s' %cls
+            print r'|%s' %comp._pub_methods_added[cls].replace(str_to_replace, '')
         print r'|}'
+        print "===Public methods removed from version %s===" %args.versions[0]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
-        print r'!Public Methods Removed'
-        for cls in comp.pub_methods_removed:
+        print r'!Method'
+        print r'!File'
+        for cls in comp._pub_methods_removed:
             print r'|-'
             print r'|%s' %cls
+            print r'|%s' %comp._pub_methods_removed[cls].replace(str_to_replace, '')
         print r'|}'
         print "==Deprecated Methods=="
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
@@ -355,17 +397,18 @@ def printReport(comp, args):
         print "==API differences when going from version %s to version %s=="\
             %(args.versions[0], args.versions[1])
         print "~~~~~~~~~~~~~~~~Classes Added~~~~~~~~~~~~~~~~~~~"
-        for cls in comp.classes_added:
-            print cls
+        for cls in comp._classes_added:
+            print "%s\t%s" %(cls, comp._classes_added[cls].replace(str_to_replace, ''))
         print "~~~~~~~~~~~~~~~Classes Removed~~~~~~~~~~~~~~~~~~"
-        for cls in comp.classes_removed:
+        for cls in comp._classes_removed:
+            print "%s\t%s" %(cls, comp._classes_removed[cls].replace(str_to_replace, ''))
             print cls
         print "~~~~~~~~~~~~~Public Methods Added~~~~~~~~~~~~~~~"
-        for cls in comp.pub_methods_added:
-            print cls
+        for cls in comp._pub_methods_added:
+            print "%s\t%s" %(cls, comp._pub_methods_added[cls].replace(str_to_replace, ''))
         print "~~~~~~~~~~~~Public Methods Removed~~~~~~~~~~~~~~"
-        for cls in comp.pub_methods_removed:
-            print cls
+        for cls in comp._pub_methods_removed:
+            print "%s\t%s" %(cls, comp._pub_methods_removed[cls].replace(str_to_replace, ''))
         print "~~~~~~~~~~~~~~Deprecated Methods~~~~~~~~~~~~~~~~~"
         for cls in comp.dep_methods:
             print "%s\tdeprecated as of\t%s" %(cls, comp.dep_methods[cls])
