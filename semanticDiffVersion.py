@@ -77,6 +77,8 @@ class Tag:
             if pre == 'inherits':
                 self._inherits = suf
                 continue
+            if pre == 'line':
+                self._fyle = self._fyle + ":" + suf
 
 class CTags():
 
@@ -196,7 +198,7 @@ class CompareVersions():
 
     def create_tagfile(self, src_dir, fname):
         ctags_proc = subprocess.Popen([self.svar.ctags_exe, '-R', '--sort=yes',
-            '--c++-kinds=cf', '--fields=aiksz', '--language-force=C++',
+            '--c++-kinds=cf', '--fields=aiknsz', '--language-force=C++',
             '--exclude=*.in', '--exclude=*.java', '--exclude=*.py',
             '--exclude=*.js', '--exclude=*.bmp', '-f', fname, src_dir],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -342,7 +344,7 @@ def printReport(comp, args):
     if args.wikiOutput:
         print "==API differences when going from version %s to version %s=="\
             %(args.versions[0], args.versions[1])
-        print "===Classes added in version %s===" %args.versions[1]
+        print "===Classes/Structs added in version %s===" %args.versions[1]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
         print r'!Class Name'
@@ -352,7 +354,7 @@ def printReport(comp, args):
             print r'|%s' %cls
             print r'|%s' %comp._classes_added[cls].replace(str_to_replace, '')
         print r'|}'
-        print "===Classes removed from version %s===" %args.versions[0]
+        print "===Classes/Structs removed from version %s===" %args.versions[0]
         print r'{| class="wikitable sortable" border="1" cellpadding="5" '\
             'cellspacing="0"'
         print r'!Class Name'
@@ -396,13 +398,12 @@ def printReport(comp, args):
         print "-------------------- REPORT --------------------"
         print "==API differences when going from version %s to version %s=="\
             %(args.versions[0], args.versions[1])
-        print "~~~~~~~~~~~~~~~~Classes Added~~~~~~~~~~~~~~~~~~~"
+        print "~~~~~~~~~~~~~Classes/Structs Added~~~~~~~~~~~~~~~"
         for cls in comp._classes_added:
             print "%s\t%s" %(cls, comp._classes_added[cls].replace(str_to_replace, ''))
-        print "~~~~~~~~~~~~~~~Classes Removed~~~~~~~~~~~~~~~~~~"
+        print "~~~~~~~~~~~~Classes/Structs Removed~~~~~~~~~~~~~~"
         for cls in comp._classes_removed:
             print "%s\t%s" %(cls, comp._classes_removed[cls].replace(str_to_replace, ''))
-            print cls
         print "~~~~~~~~~~~~~Public Methods Added~~~~~~~~~~~~~~~"
         for cls in comp._pub_methods_added:
             print "%s\t%s" %(cls, comp._pub_methods_added[cls].replace(str_to_replace, ''))
